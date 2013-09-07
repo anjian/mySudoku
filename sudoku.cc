@@ -365,6 +365,7 @@ class Map_c
             if (NULL == pCells_m)
             {
                 printf("Map is not initialized yet!\n");
+                return;
             }
 
             printf("\n");
@@ -385,6 +386,7 @@ class Map_c
             if (NULL == pCells_m)
             {
                 printf("Map is not initialized yet!\n");
+                return;
             }
 
             printf("Known count: %d\n", nKnownCount_m);
