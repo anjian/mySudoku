@@ -653,40 +653,37 @@ bool initializeSudokuMap(Map_c& sudokuMap)
 
 bool sudoku()
 {
-    // simply use maximum...
-    SudokuCellStackItem_t sudoStack[81];
-    //SimpleVector<SudokuCellStackItem_t*> newSudoStack(10);
+    // stack to keep scene
+    SimpleVector<SudokuCellStackItem_t*> sudokuStack(10);
 
-    if (!initializeSudokuMap(sudoStack[0].map_m))
+    // 1. prepare original map
     {
-        return false;
+        SudokuCellStackItem_t * pSudokuMap = new SudokuCellStackItem_t;
+        if (!initializeSudokuMap(pSudokuMap->map_m))
+        {
+            return false;
+        }
+
+        sudokuStack.append(pSudokuMap);
     }
 
-
+    // 2. Try to find one solution
     SudokuCellStackItem_t* pHeader  = NULL;
-    int nStackHeader                = 0;
     for (;true;)
     {
         // push into stack
         if (NULL == pHeader)
         {
-            //if (NULL != sudoStack[nStackHeader].pMapAvailIter_m)
-            //{
-            //    delete sudoStack[nStackHeader].pMapAvailIter_m;
-            //}
-
-            //sudoStack[nStackHeader].pMapAvailIter_m = new MapAvailableCellIterator_c(sudoStack[nStackHeader].map_m);
-
-            pHeader = &sudoStack[nStackHeader + 1];
-            pHeader->map_m = sudoStack[nStackHeader].map_m;
+            pHeader = new SudokuCellStackItem_t;
+            pHeader->map_m = sudokuStack.getLast()->map_m;
 
             if (NULL != pHeader->pCellCandidateIter_m)
             {
                 delete pHeader->pCellCandidateIter_m;
             }
-            pHeader->pCellCandidateIter_m = pHeader->map_m.getCandidateCell(); //sudoStack[nStackHeader].pMapAvailIter_m->next();
+            pHeader->pCellCandidateIter_m = pHeader->map_m.getCandidateCell();
 
-            nStackHeader++;
+            sudokuStack.append(pHeader);
         }
 
 
@@ -703,11 +700,9 @@ bool sudoku()
                 // print the result
                 pHeader->map_m.printMap();
 
-                // clear the stack
-
-                return true;
+                break;
             }
-            //else
+
             //{
             //    printf("Try [%d][%d] = %d\n",
             //            pHeader->pCellCandidateIter_m->getX(),
@@ -717,7 +712,7 @@ bool sudoku()
             //    pHeader->map_m.printMap();
             //}
 
-            // push into stack
+            // To push a new header into stack
             pHeader = NULL;
         }
         else
@@ -725,23 +720,29 @@ bool sudoku()
             if (0 == nCandidate)
             {
                 // All possible candidates have been tried, so something has been wrong previous, pop up stack
-                nStackHeader --;
+                delete sudokuStack.takeLast();
             }
 
-            if (nStackHeader <= 0)
+            if (sudokuStack.size() < 2)
             {
                 printf("Strange... could not found solution...\n");
-                return false;
+                break;
             }
 
             // no available digit, this round is failed, popup the header
-            pHeader = &sudoStack[nStackHeader];
+            pHeader = sudokuStack.getLast();
 
             // refresh map
-            pHeader->map_m = sudoStack[nStackHeader - 1].map_m;
+            pHeader->map_m = sudokuStack.get(sudokuStack.size() - 2)->map_m;
 
             //printf("Failed, let's fall back and try again...\n\n\n\n\n");
         }
+    }
+
+    // 3. clear the stack
+    for (int nIndex=sudokuStack.size()-1; nIndex>=0; nIndex--)
+    {
+        delete sudokuStack.takeLast();
     }
 
     return false;
