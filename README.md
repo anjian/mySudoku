@@ -1,0 +1,4 @@
+mySudoku
+========
+
+sudoku algorithm
