@@ -223,9 +223,7 @@ class Map_c
         Map_c() :
             pCells_m(NULL),
             nKnownCount_m(0),
-            lstSolvedCells_m(NULL),
-            nProcessingPtr_m(0),
-            nSolvedCount_m(0)
+            lstSolvedCells_m(NULL)
         {
         }
 
@@ -237,15 +235,7 @@ class Map_c
                 pCells_m = NULL;
             }
 
-            if (NULL != lstSolvedCells_m)
-            {
-                for (int i=lstSolvedCells_m->size()-1; i>=0; i++)
-                {
-                    delete (lstSolvedCells_m->takeLast());
-                }
-
-                delete lstSolvedCells_m;
-            }
+            cleanSolvedCellsList();
         }
 
         static void setDimension(int nX, int nY)
@@ -320,15 +310,13 @@ class Map_c
                 pCells_m = new CellInfo_c[CELL_COUNT];
             }
 
-            lstSolvedCells_m    = new SimpleVector<TCell*>(5);
+            bool bRet           = true;
+            bool bDone          = false;
 
             int nCurX           = x;
             int nCurY           = y;
             int nSelectedValue  = nValue;
             
-            nProcessingPtr_m    = 0;
-            nSolvedCount_m      = 0;
-
             do
             { 
                 // 1. update given cell's value
@@ -337,35 +325,39 @@ class Map_c
                 // 2. update related cells flag
                 if (false == updateRelatedCellFlag(nCurX, nCurY, nSelectedValue))
                 {
-                    return false;
+                    bRet = false;
                 }
 
                 // 3) update known cells
                 //    During updating related cells, some of them may change to known state, that means
                 //    there is one, and only one possible candidate. We'll set these cells in this round
-                if ((nSolvedCount_m > 0) && (nProcessingPtr_m < nSolvedCount_m))
+                TCell* pSolvedCell = getSolvedCell();
+                if (NULL != pSolvedCell)
                 {
-                    nCurX = solvedCells_m[nProcessingPtr_m].nX_m;
-                    nCurY = solvedCells_m[nProcessingPtr_m].nY_m;
+                    // get solved cell info
+                    nCurX = pSolvedCell->nX_m;
+                    nCurY = pSolvedCell->nY_m;
+
+                    delete pSolvedCell;
 
                     nSelectedValue = getCell(nCurX, nCurY)->getFirstCandidate();
                     if (0 == nSelectedValue)
                     {
-                        return false;
+                        bRet = false;
                     }
-
-                    //printf("Solved one: [%d][%d] = %d\n", nCurX, nCurY, nSelectedValue);
-
-                    nProcessingPtr_m++;
                 }
                 else
                 {
-                    nProcessingPtr_m    = 0;
-                    nSolvedCount_m      = 0;
+                    bDone = true;
                 }
-            } while ((nSolvedCount_m > 0) && (nProcessingPtr_m <= nSolvedCount_m));
+            } while ((false == bDone) && (true == bRet));
 
-            return true;
+            //printf("[%d][%d]=%d, total solved %d in this round.\n", x, y, nValue, nSolvedInThisRound);
+            //
+            // NOTE: MUST go there to clean solved list
+            cleanSolvedCellsList();
+
+            return bRet;
         }
 
         void printMap()
@@ -492,23 +484,50 @@ class Map_c
             return true;
         }
 
+        TCell* getSolvedCell()
+        {
+            return (NULL == lstSolvedCells_m) || (0 >= lstSolvedCells_m->size()) ? NULL : lstSolvedCells_m->takeLast();
+        }
+
         void appendSolvedCell(int x, int y)
         {
-            for (int i=0; i<nSolvedCount_m; i++)
+            if (NULL == lstSolvedCells_m)
             {
-                if ((solvedCells_m[i].nX_m == x) && (solvedCells_m[i].nY_m == y))
+                lstSolvedCells_m = new SimpleVector<TCell*>(20);
+            }
+            else
+            {
+                // check if this cell has been put into queue
+                for (int nIndex=lstSolvedCells_m->size()-1; nIndex>=0; nIndex--)
                 {
-                    // the cell has been put into queue, return directly
-                    return;
+                    TCell* pCell = lstSolvedCells_m->get(nIndex);
+                    if ((pCell->nX_m == x) && (pCell->nY_m == y))
+                    {
+                        return;
+                    }
                 }
             }
 
-            solvedCells_m[nSolvedCount_m].nX_m = x;
-            solvedCells_m[nSolvedCount_m].nY_m = y;
+            TCell* pSolvedCell = new TCell;
+            pSolvedCell->nX_m = x;
+            pSolvedCell->nY_m = y;
 
-            nSolvedCount_m++;
+            lstSolvedCells_m->append(pSolvedCell);
         }
 
+        void cleanSolvedCellsList()
+        {
+            if (NULL != lstSolvedCells_m)
+            {
+                for (int i=lstSolvedCells_m->size()-1; i>=0; i--)
+                {
+                    delete (lstSolvedCells_m->takeLast());
+                }
+
+                delete lstSolvedCells_m;
+                lstSolvedCells_m = NULL;
+            }
+        }
     private:
         static int BLOCK_DIMENSION_X;
         static int BLOCK_DIMENSION_Y;
@@ -524,11 +543,6 @@ class Map_c
 
         // FIFO queue, will not exceed 81;
         SimpleVector<TCell*> * lstSolvedCells_m;
-
-        TCell solvedCells_m[81];
-
-        int nProcessingPtr_m;
-        int nSolvedCount_m;
 };
 
 // init static variable
@@ -547,8 +561,6 @@ struct SudokuCellStackItem_t
     {
     }
     Map_c map_m;
-
-    //MapAvailableCellIterator_c* pMapAvailIter_m;
 
     CellCandidateIterator_c* pCellCandidateIter_m;
 };
@@ -643,6 +655,7 @@ bool sudoku()
 {
     // simply use maximum...
     SudokuCellStackItem_t sudoStack[81];
+    //SimpleVector<SudokuCellStackItem_t*> newSudoStack(10);
 
     if (!initializeSudokuMap(sudoStack[0].map_m))
     {
@@ -675,37 +688,7 @@ bool sudoku()
 
             nStackHeader++;
         }
-        else
-        {
-            // refresh current map anyway
-            //pHeader = &sudoStack[nStackHeader];
-            //pHeader->map_m = sudo[nStackHeader].map_m;
 
-            //pHeader->pCellCandidateIter_m = sudoStack[nStackHeader].pMapAvailIter_m->next();
-            //if (NULL == pHeader->pCellCandidateIter_m)
-
-            //nStackHeader++;
-        }
-
-
-        /*
-        if (NULL == pHeader->pCellCandidateIter_m)
-        {
-            // check if all cells are OK
-
-            // Else, that means this solution is run, let's go back and try others
-            if (0 <= nStackHeader)
-            {
-                // if already at the bottom of stack, something must go wrong...
-                return false;
-            }
-
-            // popup the header, and try next candidate
-            nStackHeader--;
-
-            pHeader = &sudoStack[nStackHeader];
-        }
-        */
 
         int nCandidate = (NULL != pHeader->pCellCandidateIter_m) ? pHeader->pCellCandidateIter_m->next() : 0;
         if ((0 != nCandidate) &&

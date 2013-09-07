@@ -41,9 +41,9 @@ template <class T> class SimpleVector
             }
         }
 
-        /**
-         * \brief Return the number of elements put into this vector.
-         */
+        //////////////////////////////////////////////////////////////////////////////// 
+        // Return the number of elements put into this vector.
+        //////////////////////////////////////////////////////////////////////////////// 
         inline int size() const { return this->num; }
         inline T* getArray()    { return array; }
 
@@ -62,6 +62,15 @@ template <class T> class SimpleVector
 
             this->array[this->num - 1] = t;
         }
+
+        //inline T takeAt(int i)
+        //{
+        //    assert (i >= 0 && this->num - i > 0);
+        //    T pRet = this->array[i];
+
+        //    this->num--;
+        //    return this->array[this->num];
+        //}
 
         // pop of stack
         inline T takeLast()
@@ -98,11 +107,11 @@ template <class T> class SimpleVector
         // */
         //inline void increase() { setSize(this->num + 1); }
 
-        /**
-         * \brief Set the size explicitely.
-         *
-         * May be necessary before calling misc::SimpleVector::set.
-         */
+        //////////////////////////////////////////////////////////////////////////////// 
+        // Set the size explicitely.
+        // 
+        // May be necessary before calling SimpleVector::set.
+        //////////////////////////////////////////////////////////////////////////////// 
         inline void setSize(int newSize)
         {
             assert (newSize >= 0);
@@ -110,22 +119,20 @@ template <class T> class SimpleVector
             this->resize ();
         }
 
-        /**
-         * \brief Return the reference of one element.
-         *
-         * \sa misc::SimpleVector::get
-         */
+        ////////////////////////////////////////////////////////////////////////////////  
+        // Return the reference of one element.
+        ////////////////////////////////////////////////////////////////////////////////  
         inline T* getRef (int i) {
             assert (i >= 0 && this->num - i > 0);
             return array + i;
         }
 
-        /**
-         * \brief Return the one element, explicitety.
-         *
-         * The element is copied, so for complex elements, you should rather used
-         * misc::SimpleVector::getRef.
-         */
+        //////////////////////////////////////////////////////////////////////////////// 
+        // Return the one element, explicitety.
+        // 
+        //  The element is copied, so for complex elements, you should rather used
+        //  SimpleVector::getRef.
+        //////////////////////////////////////////////////////////////////////////////// 
         inline T get (int i)
         {
             assert (i >= 0 && this->num - i > 0);
@@ -137,20 +144,16 @@ template <class T> class SimpleVector
             return ((SimpleVector<T>*)this)->get(i);
         }
 
-        /**
-         * \brief Store an object in the vector.
-         *
-         * Unlike in container::untyped::Vector and container::typed::Vector,
-         * you have to care about the size, so a call to
-         * misc::SimpleVector::increase or misc::SimpleVector::setSize may
-         * be necessary before.
-         */
+        //////////////////////////////////////////////////////////////////////////////// 
+        // Store an object in the vector.
+        //////////////////////////////////////////////////////////////////////////////// 
         inline void set (int i, T t)
         {
             assert (i >= 0 && this->num - i > 0);
             this->array[i] = t;
         }
 
+        /*
         void deleteAllObject()
         {
             int i;
@@ -160,13 +163,11 @@ template <class T> class SimpleVector
             }
             num = 0 ;
         }
+        */
 
     protected:
         virtual void resize ()
         {
-            /* This algorithm was tunned for memory&speed with this huge page:
-             *   http://downloads.mysql.com/docs/refman-6.0-en.html.tar.gz
-             */
             if (array == NULL)
             {
                 this->numAlloc = 1;
