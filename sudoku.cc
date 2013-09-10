@@ -222,8 +222,7 @@ class Map_c
     public:
         Map_c() :
             pCells_m(NULL),
-            nKnownCount_m(0),
-            lstSolvedCells_m(NULL)
+            nKnownCount_m(0)
         {
         }
 
@@ -234,8 +233,6 @@ class Map_c
                 delete[] pCells_m;
                 pCells_m = NULL;
             }
-
-            cleanSolvedCellsList();
         }
 
         static void setDimension(int nX, int nY)
@@ -317,13 +314,16 @@ class Map_c
             int nCurY           = y;
             int nSelectedValue  = nValue;
             
+            // solved cell stack
+            SimpleVector<TCell*> lstSolvedCells(20);
+
             do
             { 
                 // 1. update given cell's value
                 updateCell(nCurX, nCurY, nSelectedValue);
 
                 // 2. update related cells flag
-                if (false == updateRelatedCellFlag(nCurX, nCurY, nSelectedValue))
+                if (false == updateRelatedCellFlag(nCurX, nCurY, nSelectedValue, &lstSolvedCells))
                 {
                     bRet = false;
                 }
@@ -331,7 +331,7 @@ class Map_c
                 // 3) update known cells
                 //    During updating related cells, some of them may change to known state, that means
                 //    there is one, and only one possible candidate. We'll set these cells in this round
-                TCell* pSolvedCell = getSolvedCell();
+                TCell* pSolvedCell = getSolvedCell(&lstSolvedCells);
                 if (NULL != pSolvedCell)
                 {
                     // get solved cell info
@@ -355,7 +355,12 @@ class Map_c
             //printf("[%d][%d]=%d, total solved %d in this round.\n", x, y, nValue, nSolvedInThisRound);
             //
             // NOTE: MUST go there to clean solved list
-            cleanSolvedCellsList();
+            {
+                for (int i=lstSolvedCells.size()-1; i>=0; i--)
+                {
+                    delete (lstSolvedCells.takeLast());
+                }
+            }
 
             return bRet;
         }
@@ -420,28 +425,28 @@ class Map_c
             }
         }
 
-        bool updateRelatedCellFlag(int x, int y, int nValue)
+        bool updateRelatedCellFlag(int x, int y, int nValue, SimpleVector<TCell*> * lstSolvedCells)
         {
             for (int i=0; i<MAP_DIMENSION; i++)
             {
                 // update cells on related row
-                if ((i != y) && (!setCellUnavailableFlag(x, i, nValue)))
+                if ((i != y) && (!setCellUnavailableFlag(x, i, nValue, lstSolvedCells)))
                 {
                     return false;
                 }
 
                 // update cells on related column
-                if ((i != x) && (!setCellUnavailableFlag(i, y, nValue)))
+                if ((i != x) && (!setCellUnavailableFlag(i, y, nValue, lstSolvedCells)))
                 {
                     return false;
                 }
             }
 
             // update block
-            return updateRelatedCellFlagInBlock(x, y, nValue);
+            return updateRelatedCellFlagInBlock(x, y, nValue, lstSolvedCells);
         }
 
-        bool updateRelatedCellFlagInBlock(int x, int y, int nValue)
+        bool updateRelatedCellFlagInBlock(int x, int y, int nValue, SimpleVector<TCell*> * lstSolvedCells)
         {
             int nBlockRow = (x / BLOCK_DIMENSION_X) * BLOCK_DIMENSION_X;
             int nBlockCol = (y / BLOCK_DIMENSION_Y) * BLOCK_DIMENSION_Y;
@@ -454,7 +459,7 @@ class Map_c
                     int nYPos = nBlockCol + iCol;
                     if ((nXPos != x) || (nYPos != y))
                     {
-                        if (!setCellUnavailableFlag(nXPos, nYPos, nValue))
+                        if (!setCellUnavailableFlag(nXPos, nYPos, nValue, lstSolvedCells))
                         {
                             return false;
                         }
@@ -465,7 +470,7 @@ class Map_c
             return true;
         }
 
-        bool setCellUnavailableFlag(int nX, int nY, int nValue)
+        bool setCellUnavailableFlag(int nX, int nY, int nValue, SimpleVector<TCell*> * lstSolvedCells)
         {
             CellInfo_c* pCell = getCell(nX, nY);
 
@@ -479,34 +484,27 @@ class Map_c
                 // check if the cell has been solved
                 if (1 == pCell->getEmptySlotCount())
                 {
-                    appendSolvedCell(nX, nY);
+                    appendSolvedCell(lstSolvedCells, nX, nY);
                 }
             }
 
             return true;
         }
 
-        TCell* getSolvedCell()
+        TCell* getSolvedCell(SimpleVector<TCell*> * lstSolvedCells)
         {
-            return (NULL == lstSolvedCells_m) || (0 >= lstSolvedCells_m->size()) ? NULL : lstSolvedCells_m->takeLast();
+            return (0 >= lstSolvedCells->size()) ? NULL : lstSolvedCells->takeLast();
         }
 
-        void appendSolvedCell(int x, int y)
+        void appendSolvedCell(SimpleVector<TCell*> * lstSolvedCells, int x, int y)
         {
-            if (NULL == lstSolvedCells_m)
+            // check if this cell has been put into queue
+            for (int nIndex=lstSolvedCells->size()-1; nIndex>=0; nIndex--)
             {
-                lstSolvedCells_m = new SimpleVector<TCell*>(20);
-            }
-            else
-            {
-                // check if this cell has been put into queue
-                for (int nIndex=lstSolvedCells_m->size()-1; nIndex>=0; nIndex--)
+                TCell* pCell = lstSolvedCells->get(nIndex);
+                if ((pCell->nX_m == x) && (pCell->nY_m == y))
                 {
-                    TCell* pCell = lstSolvedCells_m->get(nIndex);
-                    if ((pCell->nX_m == x) && (pCell->nY_m == y))
-                    {
-                        return;
-                    }
+                    return;
                 }
             }
 
@@ -514,22 +512,9 @@ class Map_c
             pSolvedCell->nX_m = x;
             pSolvedCell->nY_m = y;
 
-            lstSolvedCells_m->append(pSolvedCell);
+            lstSolvedCells->append(pSolvedCell);
         }
 
-        void cleanSolvedCellsList()
-        {
-            if (NULL != lstSolvedCells_m)
-            {
-                for (int i=lstSolvedCells_m->size()-1; i>=0; i--)
-                {
-                    delete (lstSolvedCells_m->takeLast());
-                }
-
-                delete lstSolvedCells_m;
-                lstSolvedCells_m = NULL;
-            }
-        }
     private:
         static int BLOCK_DIMENSION_X;
         static int BLOCK_DIMENSION_Y;
@@ -542,9 +527,6 @@ class Map_c
     private:
         CellInfo_c* pCells_m;
         int nKnownCount_m;
-
-        // FIFO queue, will not exceed 81;
-        SimpleVector<TCell*> * lstSolvedCells_m;
 };
 
 // init static variable
@@ -648,6 +630,33 @@ bool initializeSudokuMap(Map_c& sudokuMap)
         sudokuMap.setCell(6, 8, 4);
     }
 
+    // test map 3
+    /*
+    {
+        Map_c::setDimension(3, 2);
+
+        sudokuMap.setCell(3, 0, 6);
+        sudokuMap.setCell(5, 0, 1);
+
+        sudokuMap.setCell(3, 1, 4);
+        sudokuMap.setCell(4, 1, 5);
+
+        sudokuMap.setCell(0, 2, 6);
+        sudokuMap.setCell(4, 2, 2);
+        sudokuMap.setCell(5, 2, 5);
+
+        sudokuMap.setCell(0, 3, 3);
+        sudokuMap.setCell(1, 3, 5);
+        sudokuMap.setCell(5, 3, 6);
+
+        sudokuMap.setCell(1, 4, 3);
+        sudokuMap.setCell(2, 4, 6);
+
+        sudokuMap.setCell(0, 5, 2);
+        sudokuMap.setCell(2, 5, 1);
+    }
+    */
+
     sudokuMap.printMap();
 
     return true;
@@ -664,6 +673,12 @@ bool sudoku()
         if (!initializeSudokuMap(pSudokuMap->map_m))
         {
             return false;
+        }
+
+        if (pSudokuMap->map_m.isSolved())
+        {
+            printf("It's too easy... not interesting...\n");
+            return true;
         }
 
         sudokuStack.append(pSudokuMap);
